@@ -12,6 +12,7 @@
     "jest": "^28.0.2"
   },
   "jest": {
-    "verbose": false
+    "verbose": false,
+    "clearMocks": true
   }
 }

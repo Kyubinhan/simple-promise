@@ -42,11 +42,10 @@ class SimplePromise {
   }
 
   static resolve(value) {
-    if (
-      value instanceof SimplePromise ||
-      (value && value.then) //  handle thenable
-    ) {
+    if (value instanceof SimplePromise) {
       return value;
+    } else if (value && value.then /* handle thenable */) {
+      return new SimplePromise(value.then);
     }
 
     // Turn non-promise value into a promise
@@ -64,36 +63,38 @@ class SimplePromise {
   then(onFulfilled, onRejected) {
     const isResolvedSynchronously = this.#state === "fulfilled";
     const isRejectedSynchronously = this.#state === "rejected";
+    const isCatchChained = !onFulfilled && onRejected;
 
-    const handleFulFill = (resolve, value) => {
+    const handleFulFill = (resolve, reject, value) => {
       const returned = onFulfilled ? onFulfilled(value) : value;
 
       // Relay the returned value based on its type
       if (returned instanceof SimplePromise) {
-        returned.then((v) => resolve(v));
+        returned.then(resolve, reject);
       } else {
         resolve(returned);
       }
     };
-    const handleReject = (reject, reason) => {
-      onRejected(reason);
-      reject(reason);
+    const handleReject = (resolve, reject, reason) => {
+      onRejected && onRejected(reason);
+
+      if (isCatchChained) {
+        // After a catch the chain is restored hence resolve it
+        resolve();
+      } else {
+        reject(reason);
+      }
     };
 
     return new SimplePromise((resolve, reject) => {
       if (isResolvedSynchronously) {
-        handleFulFill(resolve, this.#value);
+        handleFulFill(resolve, reject, this.#value);
       } else if (isRejectedSynchronously) {
-        handleReject(reject, this.#reason);
+        handleReject(resolve, reject, this.#reason);
       } else {
         // Schedule to run them later when resolved or rejected at some point
-        this.#onFulfilled = (value) => {
-          handleFulFill(resolve, value);
-        };
-
-        this.#onRejected = (reason) => {
-          handleReject(reject, reason);
-        };
+        this.#onFulfilled = (value) => handleFulFill(resolve, reject, value);
+        this.#onRejected = (reason) => handleReject(resolve, reject, reason);
       }
     });
   }
@@ -112,24 +113,3 @@ class SimplePromise {
 }
 
 module.exports = SimplePromise;
-
-// SimplePromise.resolve("foo").catch((reason) => {
-//   console.log(reason);
-// });
-
-// SimplePromise.resolve()
-//   .then(() => {
-//     // Makes .then() return a rejected promise
-//     throw new Error("Oh no!");
-//   })
-//   .then(
-//     () => {
-//       console.log("Not called.");
-//     },
-//     (error) => {
-//       console.error("onRejected function called: " + error.message);
-//     }
-//   );
-// .catch(() => {
-// 	console.log('catch?')
-// });
