@@ -42,35 +42,64 @@ class SimplePromise {
   }
 
   static resolve(value) {
-    if (value instanceof SimplePromise) {
+    if (
+      value instanceof SimplePromise ||
+      (value && value.then) //  handle thenable
+    ) {
       return value;
-    } else if (value && value.then) {
-      return new SimplePromise(value.then);
     }
 
+    // Turn non-promise value into a promise
     return new SimplePromise((resolve) => {
       resolve(value);
     });
   }
 
+  static reject(reason) {
+    return new SimplePromise((_, reject) => {
+      reject(reason);
+    });
+  }
+
   then(onFulfilled, onRejected) {
-    if (this.#state === "fulfilled" /* synchronously resolved */) {
-      const returned = onFulfilled(this.#value);
+    const isResolvedSynchronously = this.#state === "fulfilled";
+    const isRejectedSynchronously = this.#state === "rejected";
 
-      return SimplePromise.resolve(returned);
-    } else if (this.#state === "rejected" /* synchronously rejected */) {
-      onRejected(this.#reason);
-    } else {
-      // hasn't been resolved or rejected yet so save them to invoke later
-      this.#onFulfilled = onFulfilled;
-      this.#onRejected = onRejected;
+    const handleFulFill = (resolve, value) => {
+      const returned = onFulfilled ? onFulfilled(value) : value;
 
-      console.log(this);
-    }
+      // Relay the returned value based on its type
+      if (returned instanceof SimplePromise) {
+        returned.then((v) => resolve(v));
+      } else {
+        resolve(returned);
+      }
+    };
+    const handleReject = (reject, reason) => {
+      onRejected(reason);
+      reject(reason);
+    };
+
+    return new SimplePromise((resolve, reject) => {
+      if (isResolvedSynchronously) {
+        handleFulFill(resolve, this.#value);
+      } else if (isRejectedSynchronously) {
+        handleReject(reject, this.#reason);
+      } else {
+        // Schedule to run them later when resolved or rejected at some point
+        this.#onFulfilled = (value) => {
+          handleFulFill(resolve, value);
+        };
+
+        this.#onRejected = (reason) => {
+          handleReject(reject, reason);
+        };
+      }
+    });
   }
 
   catch(onRejected) {
-    this.then(undefined, onRejected);
+    return this.then(undefined, onRejected);
   }
 
   finally(onFinally) {
@@ -83,3 +112,24 @@ class SimplePromise {
 }
 
 module.exports = SimplePromise;
+
+// SimplePromise.resolve("foo").catch((reason) => {
+//   console.log(reason);
+// });
+
+// SimplePromise.resolve()
+//   .then(() => {
+//     // Makes .then() return a rejected promise
+//     throw new Error("Oh no!");
+//   })
+//   .then(
+//     () => {
+//       console.log("Not called.");
+//     },
+//     (error) => {
+//       console.error("onRejected function called: " + error.message);
+//     }
+//   );
+// .catch(() => {
+// 	console.log('catch?')
+// });

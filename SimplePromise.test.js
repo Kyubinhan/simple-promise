@@ -4,7 +4,7 @@ const SimplePromise = require("./SimplePromise");
 const mockAsync = (func) => {
   setTimeout(() => {
     func();
-  }, 100);
+  }, 10);
 };
 
 describe("SimplePromise", () => {
@@ -133,36 +133,140 @@ describe("SimplePromise", () => {
 
       new SimplePromise((_, reject) => {
         throw reason;
-      }).finally(mock);
+      })
+        .catch(mock)
+        .finally(mock);
 
-      expect(mock).toHaveBeenCalledTimes(1);
+      expect(mock).toHaveBeenCalledTimes(2);
     });
 
-    it("execute given function async", (done) => {
+    it("execute given function asynchronously", (done) => {
       const mock = jest.fn();
 
       new SimplePromise((resolve) => {
         mockAsync(() => resolve(value));
-      }).then(mock);
-      // .finally(() => {
-      //   expect(mock).toHaveBeenCalledTimes(1);
-      //   done();
-      // });
+      })
+        .then(mock)
+        .then(() => {
+          return new SimplePromise((resolve) => {
+            mockAsync(() => resolve(value));
+          });
+        })
+        .then(mock)
+        .finally(() => {
+          expect(mock).toHaveBeenCalledTimes(2);
+          done();
+        });
     });
   });
 
   describe("chaining", () => {
-    it("can chain multiple thens", () => {
+    it("allows for method chaining", (done) => {
       new SimplePromise((resolve) => {
-        resolve(value);
+        resolve("foo");
       })
         .then((v) => {
-          expect(v).toBe(value);
-          return `${v} 2`;
+          expect(v).toBe("foo");
+          return `${v}bar`;
         })
         .then((v2) => {
-          expect(v2).toBe(`${value} 2`);
+          expect(v2).toBe("foobar");
+          return `${v2}baz`;
+        })
+        .then((v3) => {
+          expect(v3).toBe(`foobarbaz`);
+          done();
         });
+    });
+
+    it("allows for method chaining for async tasks", (done) => {
+      new SimplePromise((resolve) => {
+        mockAsync(() => resolve("first"));
+      })
+        .then((v) => {
+          expect(v).toBe("first");
+          return "second";
+        })
+        .then((v) => {
+          expect(v).toBe("second");
+          return new SimplePromise((resolve) => {
+            mockAsync(() => resolve("third"));
+          });
+        })
+        .then((v) => {
+          expect(v).toBe("third");
+          done();
+        });
+    });
+
+    it("catch", (done) => {
+      const p1 = new SimplePromise(function (resolve, reject) {
+        resolve("Success");
+      });
+
+      // The following behaves the same as above
+      p1.then(function (value) {
+        console.log(value); // "Success!"
+        return SimplePromise.reject("oh, no!");
+      })
+        .catch(function (e) {
+          console.error(e); // "oh, no!"
+          done();
+        })
+        .then(
+          function () {
+            console.log("after a catch the chain is restored");
+            done();
+          },
+          function () {
+            console.log("Not fired due to the catch");
+          }
+        );
+    });
+
+    it.skip("fun ordering test", (done) => {
+      SimplePromise.resolve("foo")
+        // 1. Receive "foo", concatenate "bar" to it, and resolve that to the next then
+        .then(function (string) {
+          return new SimplePromise(function (resolve, reject) {
+            setTimeout(function () {
+              string += "bar";
+              resolve(string);
+            }, 1);
+          });
+        })
+        // 2. receive "foobar", register a callback function to work on that string
+        // and print it to the console, but not before returning the unworked on
+        // string to the next then
+        .then(function (string) {
+          setTimeout(function () {
+            string += "baz";
+            console.log(string); // foobarbaz
+
+            done();
+          }, 1);
+
+          return string;
+        })
+        // 3. print helpful messages about how the code in this section will be run
+        // before the string is actually processed by the mocked asynchronous code in the
+        // previous then block.
+        .then(function (string) {
+          console.log(
+            "Last Then:  oops... didn't bother to instantiate and return " +
+              "a promise in the prior then so the sequence may be a bit " +
+              "surprising"
+          );
+
+          // Note that `string` will not have the 'baz' bit of it at this point. This
+          // is because we mocked that to happen asynchronously with a setTimeout function
+          console.log(string); // foobar
+        });
+
+      // logs, in order:
+      // Last Then: oops... didn't bother to instantiate and return a promise in the prior then so the sequence may be a bit surprising
+      // foobar
+      // foobarbaz
     });
   });
 });
