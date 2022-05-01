@@ -10,8 +10,48 @@ describe("SimplePromise", () => {
   const value = "Awesome value";
   const reason = "Unlawful reason";
 
+  describe("all() method", () => {
+    it("throw error if given param is not iterable", () => {
+      try {
+        SimplePromise.all(undefined);
+      } catch (err) {
+        expect(err.message).toBe("Cannot convert undefined or null to object");
+      }
+    });
+
+    it("resolve an array of results", (done) => {
+      const p1 = SimplePromise.resolve(3);
+      const p2 = new SimplePromise((resolve) => {
+        mockAsync(() => resolve(value));
+      });
+      const p3 = 42;
+
+      SimplePromise.all([p1, p2, p3]).then((values) => {
+        expect(values).toEqual([3, value, 42]);
+        done();
+      });
+    });
+
+    it("fail fast when any of elements are rejected", () => {
+      const p1 = SimplePromise.resolve(3);
+      const p2 = new SimplePromise((resolve) => {
+        mockAsync(() => resolve(value));
+      });
+      const p3 = SimplePromise.reject(reason);
+
+      const mockResolve = jest.fn();
+      const mockReject = jest.fn();
+
+      SimplePromise.all([p1, p2, p3]).then(mockResolve).catch(mockReject);
+
+      expect(mockResolve).toHaveBeenCalledTimes(0);
+      expect(mockReject).toHaveBeenCalledTimes(1);
+      expect(mockReject).toHaveBeenCalledWith(reason);
+    });
+  });
+
   describe("then() method", () => {
-    it("expect value when resolved", () => {
+    it("run success callback when resolved", () => {
       new SimplePromise((resolve) => {
         resolve(value);
       }).then((v) => {
@@ -19,7 +59,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("expect value when resolved asynchronously", (done) => {
+    it("run success callback when resolved asynchronously", (done) => {
       new SimplePromise((resolve) => {
         mockAsync(() => resolve(value));
       }).then((v) => {
@@ -28,7 +68,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("return value when resolved asynchronously with async & await", async () => {
+    it("allows async/await to handle async task", async () => {
       const v = await new SimplePromise((resolve) => {
         mockAsync(() => resolve(value));
       });
@@ -36,7 +76,7 @@ describe("SimplePromise", () => {
       expect(v).toBe(value);
     });
 
-    it("expect reason when rejected", () => {
+    it("run failure callback when rejected", () => {
       new SimplePromise((_, reject) => {
         reject(reason);
       }).then(undefined, (r) => {
@@ -44,7 +84,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("expect reason when rejected asynchronously", (done) => {
+    it("run failure callback when rejected asynchronously", (done) => {
       new SimplePromise((_, reject) => {
         mockAsync(() => reject(reason));
       }).then(undefined, (r) => {
@@ -53,7 +93,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("catch reason when rejected asynchronously with async & await", async () => {
+    it("throw reason when rejected asynchronously with async & await", async () => {
       try {
         await new SimplePromise((_, reject) => {
           mockAsync(() => reject(reason));
@@ -65,7 +105,7 @@ describe("SimplePromise", () => {
   });
 
   describe("catch() method", () => {
-    it("expect reason when rejected", () => {
+    it("run callback when rejected", () => {
       new SimplePromise((_, reject) => {
         reject(reason);
       }).catch((r) => {
@@ -73,7 +113,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("expect reason when rejected asynchronously", (done) => {
+    it("run callback when rejected asynchronously", (done) => {
       new SimplePromise((_, reject) => {
         mockAsync(() => reject(reason));
       }).catch((r) => {
@@ -82,7 +122,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("catch error when error thrown", () => {
+    it("run callback when error is thrown within the promise", () => {
       new SimplePromise((_, reject) => {
         throw reason;
       }).catch((e) => {
@@ -92,13 +132,13 @@ describe("SimplePromise", () => {
   });
 
   describe("resolve() method", () => {
-    it("expect value", () => {
+    it("return a resolved promise", () => {
       SimplePromise.resolve(value).then((v) => {
         expect(v).toBe(value);
       });
     });
 
-    it("expect value with nested resolves", () => {
+    it("return given value as is when the value is promise", () => {
       const a = SimplePromise.resolve(value);
       const b = SimplePromise.resolve(a);
       const c = SimplePromise.resolve(b);
@@ -111,7 +151,7 @@ describe("SimplePromise", () => {
       });
     });
 
-    it("expect value with thenable", () => {
+    it("handle thenable value", () => {
       const p1 = SimplePromise.resolve({
         then: (onFulfilled) => {
           onFulfilled(value);
@@ -127,7 +167,7 @@ describe("SimplePromise", () => {
   });
 
   describe("reject() method", () => {
-    it("expect reason", () => {
+    it("return a rejected promise", () => {
       const mockResolve = jest.fn();
       const mockReject = jest.fn();
 
@@ -142,7 +182,7 @@ describe("SimplePromise", () => {
   });
 
   describe("finally() method", () => {
-    it("execute given function", () => {
+    it("run callback at the end", () => {
       const mock = jest.fn();
       SimplePromise.resolve(value)
         .then(mock)
@@ -151,7 +191,7 @@ describe("SimplePromise", () => {
         });
     });
 
-    it("execute given function asynchronously", (done) => {
+    it("run callback after all async tasks are done", (done) => {
       const mock = jest.fn();
 
       new SimplePromise((resolve) => {

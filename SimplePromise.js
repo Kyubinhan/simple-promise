@@ -41,6 +41,38 @@ class SimplePromise {
     }
   }
 
+  static all(iterable) {
+    const values = Object.values(iterable);
+
+    let numOfResolved = 0;
+    const resolvedMap = {};
+    const handleResolve = (resolve, value, idx) => {
+      resolvedMap[idx] = value;
+      numOfResolved++;
+      if (numOfResolved === values.length) {
+        // Order is kept thx to indexed properties
+        resolve(Object.values(resolvedMap));
+      }
+    };
+
+    return new SimplePromise((resolve, reject) => {
+      values.forEach((value, idx) => {
+        if (value instanceof SimplePromise) {
+          value.then(
+            (v) => {
+              handleResolve(resolve, v, idx);
+            },
+            (r) => {
+              reject(r);
+            }
+          );
+        } else {
+          handleResolve(resolve, value, idx);
+        }
+      });
+    });
+  }
+
   static resolve(value) {
     if (value instanceof SimplePromise) {
       return value;
