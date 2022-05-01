@@ -209,6 +209,20 @@ describe("SimplePromise", () => {
           done();
         });
     });
+
+    it("pass down resolved value or rejected reason to next chain", () => {
+      SimplePromise.resolve(value)
+        .finally(() => {})
+        .then((v) => {
+          expect(v).toBe(value);
+        });
+
+      SimplePromise.reject(reason)
+        .finally(() => {})
+        .catch((v) => {
+          expect(v).toBe(reason);
+        });
+    });
   });
 
   describe("chaining", () => {
@@ -270,7 +284,7 @@ describe("SimplePromise", () => {
     });
 
     it("handles ordering properly", (done) => {
-      const expected = ["last then is called!", "foobar", "foobarbaz"];
+      const expected = ["the last then is called!", "foobar", "foobarbaz"];
       const strings = [];
 
       SimplePromise.resolve("foo")
@@ -301,7 +315,7 @@ describe("SimplePromise", () => {
         // before the string is actually processed by the mocked asynchronous code in the
         // previous then block.
         .then((string) => {
-          strings.push("last then is called!");
+          strings.push("the last then is called!");
 
           // Note that `string` will not have the 'baz' bit of it at this point. This
           // is because we mocked that to happen asynchronously with a setTimeout function

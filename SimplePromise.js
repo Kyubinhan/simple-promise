@@ -1,3 +1,6 @@
+/**
+ * Represents the completion of an asynchronous operation
+ */
 class SimplePromise {
   #state = "pending";
   #value;
@@ -6,6 +9,9 @@ class SimplePromise {
   #onRejected;
   #onFinally;
 
+  /**
+   * @param {Function} executor A callback used to initialize the promise.
+   */
   constructor(executor) {
     const resolve = (value) => {
       this.#state = "fulfilled";
@@ -17,7 +23,7 @@ class SimplePromise {
       }
 
       if (this.#onFinally) {
-        this.#onFinally();
+        this.#onFinally(value, null);
       }
     };
     const reject = (reason) => {
@@ -30,7 +36,7 @@ class SimplePromise {
       }
 
       if (this.#onFinally) {
-        this.#onFinally();
+        this.#onFinally(null, reason);
       }
     };
 
@@ -41,6 +47,14 @@ class SimplePromise {
     }
   }
 
+  /**
+   * Creates a Promise that is resolved with an array of results when all of the
+   * provided Promises resolve, or rejected when any Promise is rejected.
+   *
+   * @param {Array} iterable An iterable of Promises.
+   *
+   * @returns A new Promise.
+   */
   static all(iterable) {
     const values = Object.values(iterable);
 
@@ -73,10 +87,16 @@ class SimplePromise {
     });
   }
 
+  /**
+   * Creates a new resolved promise for the provided value.
+   * @param value A promise.
+   *
+   * @returns A promise whose internal state matches the provided promise..
+   */
   static resolve(value) {
     if (value instanceof SimplePromise) {
       return value;
-    } else if (value && value.then /* handle thenable */) {
+    } else if (value?.then /* handle thenable */) {
       return new SimplePromise(value.then);
     }
 
@@ -86,12 +106,27 @@ class SimplePromise {
     });
   }
 
+  /**
+   * Creates a new rejected promise for the provided reason.
+   *
+   * @param reason The reason the promise was rejected.
+   *
+   * @returns A new rejected Promise.
+   */
   static reject(reason) {
     return new SimplePromise((_, reject) => {
       reject(reason);
     });
   }
 
+  /**
+   * Attaches callbacks for the resolution and/or rejection of the Promise.
+   *
+   * @param onFulfilled The callback to execute when the Promise is resolved.
+   * @param onRejected The callback to execute when the Promise is rejected.
+   *
+   * @returns A Promise for the completion of which ever callback is executed.
+   */
   then(onFulfilled, onRejected) {
     const isResolvedSynchronously = this.#state === "fulfilled";
     const isRejectedSynchronously = this.#state === "rejected";
@@ -108,7 +143,7 @@ class SimplePromise {
       }
     };
     const handleReject = (resolve, reject, reason) => {
-      onRejected && onRejected(reason);
+      onRejected?.(reason);
 
       if (isCatchChained) {
         // After a catch the chain is restored hence resolve it
@@ -124,23 +159,53 @@ class SimplePromise {
       } else if (isRejectedSynchronously) {
         handleReject(resolve, reject, this.#reason);
       } else {
-        // Schedule to run them later when resolved or rejected at some point
+        // Schedule to run later when resolved or rejected at some point
         this.#onFulfilled = (value) => handleFulFill(resolve, reject, value);
         this.#onRejected = (reason) => handleReject(resolve, reject, reason);
       }
     });
   }
 
+  /**
+   * Attaches a callback for only the rejection of the Promise.
+   *
+   * @param onRejected The callback to execute when the Promise is rejected.
+   *
+   * @returns A Promise for the completion of the callback.
+   */
   catch(onRejected) {
     return this.then(undefined, onRejected);
   }
 
+  /**
+   * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected).
+   * The resolved value cannot be modified from the callback.
+   *
+   * @param onFinally The callback to execute when the Promise is settled (fulfilled or rejected).
+   *
+   * @returns A Promise for the completion of the callback.
+   */
   finally(onFinally) {
-    if (this.#state === "pending") {
-      this.#onFinally = onFinally;
-    } else {
-      onFinally();
-    }
+    const isPending = this.#state === "pending";
+
+    const handleFinally = (resolve, reject, value, reason) => {
+      onFinally?.();
+
+      if (value) {
+        resolve(value);
+      } else if (reason) {
+        reject(reason);
+      }
+    };
+
+    return new SimplePromise((resolve, reject) => {
+      if (isPending) {
+        this.#onFinally = (value, reason) =>
+          handleFinally(resolve, reject, value, reason);
+      } else {
+        handleFinally(resolve, reject, this.#value, this.#reason);
+      }
+    });
   }
 }
 
