@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "a simplified version of Promise class",
   "main": "SimplePromise.js",
+  "engines" : { 
+    "npm" : ">=8.0.0",
+    "node" : ">=16.0.0"
+  },
   "scripts": {
     "test": "jest"
   },
