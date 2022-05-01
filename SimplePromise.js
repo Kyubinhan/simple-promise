@@ -2,7 +2,7 @@
  * Represents the completion of an asynchronous operation
  */
 class SimplePromise {
-  #state = "pending";
+  #state = 'pending';
   #value;
   #reason;
   #onFulfilled;
@@ -14,7 +14,7 @@ class SimplePromise {
    */
   constructor(executor) {
     const resolve = (value) => {
-      this.#state = "fulfilled";
+      this.#state = 'fulfilled';
 
       this.#value = value;
 
@@ -27,7 +27,7 @@ class SimplePromise {
       }
     };
     const reject = (reason) => {
-      this.#state = "rejected";
+      this.#state = 'rejected';
 
       this.#reason = reason;
 
@@ -128,8 +128,8 @@ class SimplePromise {
    * @returns A Promise for the completion of which ever callback is executed.
    */
   then(onFulfilled, onRejected) {
-    const isResolvedSynchronously = this.#state === "fulfilled";
-    const isRejectedSynchronously = this.#state === "rejected";
+    const isResolvedSynchronously = this.#state === 'fulfilled';
+    const isRejectedSynchronously = this.#state === 'rejected';
     const isCatchChained = !onFulfilled && onRejected;
 
     const handleFulFill = (resolve, reject, value) => {
@@ -186,7 +186,7 @@ class SimplePromise {
    * @returns A Promise for the completion of the callback.
    */
   finally(onFinally) {
-    const isPending = this.#state === "pending";
+    const isPending = this.#state === 'pending';
 
     const handleFinally = (resolve, reject, value, reason) => {
       onFinally?.();
