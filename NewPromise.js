@@ -16,8 +16,8 @@ class NewPromise {
 
     this._state = STATE.PENDING;
 
-    const resolve = this._resolveToSettle.bind(this);
-    const reject = this._rejectToSettle.bind(this);
+    const resolve = this._resolveToSettle;
+    const reject = this._rejectToSettle;
 
     try {
       executor(resolve, reject);
@@ -55,7 +55,7 @@ class NewPromise {
     }
   }
 
-  _resolveToSettle(value) {
+  _resolveToSettle = (value) => {
     if (this._state === STATE.PENDING) {
       this._state = STATE.FULFILLED;
       this._value = value;
@@ -65,9 +65,9 @@ class NewPromise {
         this._handleOnFulfilled(childPromise, onFulfilled, value);
       }
     }
-  }
+  };
 
-  _rejectToSettle(reason) {
+  _rejectToSettle = (reason) => {
     if (this._state === STATE.PENDING) {
       this._state = STATE.REJECTED;
       this._reason = reason;
@@ -77,7 +77,7 @@ class NewPromise {
         this._handleOnRejected(childPromise, onRejected, reason);
       }
     }
-  }
+  };
 
   static resolve(value) {
     return new NewPromise((resolve) => resolve(value));
@@ -87,7 +87,7 @@ class NewPromise {
     return new NewPromise((_, reject) => reject(reason));
   }
 
-  then(_onFulfilled, _onRejected) {
+  then = (_onFulfilled, _onRejected) => {
     const onFulfilled =
       typeof _onFulfilled === 'function' ? _onFulfilled : (value) => value;
     const onRejected =
@@ -121,11 +121,11 @@ class NewPromise {
     }
 
     return promiseToReturn;
-  }
+  };
 
-  catch(onRejected) {
+  catch = (onRejected) => {
     return this.then(undefined, onRejected);
-  }
+  };
 }
 
 module.exports = NewPromise;
