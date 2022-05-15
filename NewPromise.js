@@ -51,19 +51,22 @@ class NewPromise {
   };
 
   _executeHandler(promise, handler, valueOrReason) {
-    try {
-      const valueOrError = handler(valueOrReason);
-      if (isThenable(valueOrError)) {
-        valueOrError.then(
-          (v) => promise._resolveToSettle(v),
-          (r) => promise._rejectToSettle(r)
-        );
-      } else {
-        promise._resolveToSettle(valueOrError);
+    // Queue handler task in microtask queue
+    queueMicrotask(() => {
+      try {
+        const valueOrError = handler(valueOrReason);
+        if (isThenable(valueOrError)) {
+          valueOrError.then(
+            (v) => promise._resolveToSettle(v),
+            (r) => promise._rejectToSettle(r)
+          );
+        } else {
+          promise._resolveToSettle(valueOrError);
+        }
+      } catch (err) {
+        promise._rejectToSettle(err);
       }
-    } catch (err) {
-      promise._rejectToSettle(err);
-    }
+    });
   }
 
   static resolve(value) {
@@ -90,15 +93,9 @@ class NewPromise {
     const isRejectedRightAway = this._state === STATE.REJECTED;
 
     if (isResolvedRightAway) {
-      // Queue onFulfilled task in microtask queue
-      queueMicrotask(() => {
-        this._executeHandler(promiseToReturn, onFulfilled, this._value);
-      });
+      this._executeHandler(promiseToReturn, onFulfilled, this._value);
     } else if (isRejectedRightAway) {
-      // Queue onRejected task in microtask queue
-      queueMicrotask(() => {
-        this._executeHandler(promiseToReturn, onRejected, this._reason);
-      });
+      this._executeHandler(promiseToReturn, onRejected, this._reason);
     } else {
       this._thingsToHandleOnceSettled = [
         promiseToReturn,
