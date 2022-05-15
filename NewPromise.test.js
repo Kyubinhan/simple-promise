@@ -12,9 +12,10 @@ describe('NewPromise', () => {
   const reason = 'Unlawful reason';
 
   describe('then() method', () => {
-    it('run success handler when resolved', () => {
-      return NewPromise.resolve(value).then((v) => {
+    it('run success handler when resolved', (done) => {
+      NewPromise.resolve(value).then((v) => {
         expect(v).toBe(value);
+        done();
       });
     });
 
@@ -30,11 +31,12 @@ describe('NewPromise', () => {
       result.push('second?');
     });
 
-    it('run success handler when resolved asynchronously', () => {
-      return new NewPromise((resolve) => {
+    it('run success handler when resolved asynchronously', (done) => {
+      new NewPromise((resolve) => {
         mockAsync(() => resolve(value));
       }).then((v) => {
         expect(v).toBe(value);
+        done();
       });
     });
 
@@ -46,19 +48,21 @@ describe('NewPromise', () => {
       expect(v).toBe(value);
     });
 
-    it('run failure handler when rejected', () => {
-      return new NewPromise((_, reject) => {
+    it('run failure handler when rejected', (done) => {
+      new NewPromise((_, reject) => {
         reject(reason);
       }).then(undefined, (r) => {
         expect(r).toBe(reason);
+        done();
       });
     });
 
-    it('run failure handler when rejected asynchronously', () => {
-      return new NewPromise((_, reject) => {
+    it('run failure handler when rejected asynchronously', (done) => {
+      new NewPromise((_, reject) => {
         mockAsync(() => reject(reason));
       }).then(undefined, (r) => {
         expect(r).toBe(reason);
+        done();
       });
     });
 
