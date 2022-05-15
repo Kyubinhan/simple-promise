@@ -26,38 +26,6 @@ class NewPromise {
     }
   }
 
-  _handleOnFulfilled(promise, onFulfilled, value) {
-    try {
-      const valueOrError = onFulfilled(value);
-      if (isThenable(valueOrError)) {
-        valueOrError.then(
-          (v) => promise._resolveToSettle(v),
-          (r) => promise._rejectToSettle(r)
-        );
-      } else {
-        promise._resolveToSettle(valueOrError);
-      }
-    } catch (err) {
-      promise._rejectToSettle(err);
-    }
-  }
-
-  _handleOnRejected(promise, onRejected, reason) {
-    try {
-      const valueOrError = onRejected(reason);
-      if (isThenable(valueOrError)) {
-        valueOrError.then(
-          (v) => promise._resolveToSettle(v),
-          (r) => promise._rejectToSettle(r)
-        );
-      } else {
-        promise._resolveToSettle(valueOrError);
-      }
-    } catch (err) {
-      promise._rejectToSettle(err);
-    }
-  }
-
   _resolveToSettle = (value) => {
     if (this._state === STATE.PENDING) {
       this._state = STATE.FULFILLED;
@@ -65,7 +33,7 @@ class NewPromise {
 
       if (this._thingsToHandleOnceSettled) {
         const [childPromise, onFulfilled] = this._thingsToHandleOnceSettled;
-        this._handleOnFulfilled(childPromise, onFulfilled, value);
+        this._executeHandler(childPromise, onFulfilled, value);
       }
     }
   };
@@ -77,10 +45,26 @@ class NewPromise {
 
       if (this._thingsToHandleOnceSettled) {
         const [childPromise, _, onRejected] = this._thingsToHandleOnceSettled;
-        this._handleOnRejected(childPromise, onRejected, reason);
+        this._executeHandler(childPromise, onRejected, reason);
       }
     }
   };
+
+  _executeHandler(promise, handler, valueOrReason) {
+    try {
+      const valueOrError = handler(valueOrReason);
+      if (isThenable(valueOrError)) {
+        valueOrError.then(
+          (v) => promise._resolveToSettle(v),
+          (r) => promise._rejectToSettle(r)
+        );
+      } else {
+        promise._resolveToSettle(valueOrError);
+      }
+    } catch (err) {
+      promise._rejectToSettle(err);
+    }
+  }
 
   static resolve(value) {
     return new NewPromise((resolve) => resolve(value));
@@ -102,18 +86,18 @@ class NewPromise {
 
     const promiseToReturn = new NewPromise(noop);
 
-    const isResolvedSynchronously = this._state === STATE.FULFILLED;
-    const isRejectedSynchronously = this._state === STATE.REJECTED;
+    const isResolvedRightAway = this._state === STATE.FULFILLED;
+    const isRejectedRightAway = this._state === STATE.REJECTED;
 
-    if (isResolvedSynchronously) {
+    if (isResolvedRightAway) {
       // Queue onFulfilled task in microtask queue
       queueMicrotask(() => {
-        this._handleOnFulfilled(promiseToReturn, onFulfilled, this._value);
+        this._executeHandler(promiseToReturn, onFulfilled, this._value);
       });
-    } else if (isRejectedSynchronously) {
+    } else if (isRejectedRightAway) {
       // Queue onRejected task in microtask queue
       queueMicrotask(() => {
-        this._handleOnRejected(promiseToReturn, onRejected, this._reason);
+        this._executeHandler(promiseToReturn, onRejected, this._reason);
       });
     } else {
       this._thingsToHandleOnceSettled = [
