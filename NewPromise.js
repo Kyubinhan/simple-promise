@@ -31,12 +31,8 @@ class NewPromise {
       const valueOrError = onFulfilled(value);
       if (isThenable(valueOrError)) {
         valueOrError.then(
-          (v) => {
-            promise._resolveToSettle(v);
-          },
-          (r) => {
-            promise._rejectToSettle(r);
-          }
+          (v) => promise._resolveToSettle(v),
+          (r) => promise._rejectToSettle(r)
         );
       } else {
         promise._resolveToSettle(valueOrError);
@@ -49,7 +45,14 @@ class NewPromise {
   _handleOnRejected(promise, onRejected, reason) {
     try {
       const valueOrError = onRejected(reason);
-      promise._resolveToSettle(valueOrError);
+      if (isThenable(valueOrError)) {
+        valueOrError.then(
+          (v) => promise._resolveToSettle(v),
+          (r) => promise._rejectToSettle(r)
+        );
+      } else {
+        promise._resolveToSettle(valueOrError);
+      }
     } catch (err) {
       promise._rejectToSettle(err);
     }

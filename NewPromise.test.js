@@ -1,3 +1,4 @@
+// const NewPromise = Promise;
 const NewPromise = require('./NewPromise');
 
 const mockAsync = (func) => {
@@ -71,23 +72,25 @@ describe('NewPromise', () => {
       }
     });
 
-    it.skip('demonstrating asynchronicity of the then method', (done) => {
-      const p = new NewPromise((resolve, reject) => {
-        resolve(33);
-      }).then(() => {
-        throw 'error!';
+    it.skip('demonstrates asynchronicity of the then method', (done) => {
+      const p = NewPromise.resolve().then(() => {
+        throw reason;
       });
 
-      console.log(p); // p is pending
-      p.then(null, console.log); // log 'error!'
+      expect(p._state).toBe('pending');
+
+      p.then(null, (r) => {
+        expect(r).toBe(reason);
+      });
+
       setTimeout(() => {
-        console.log(p); // p is now rejected
+        expect(p._state).toBe('rejected');
         done();
       }, 0);
     });
 
-    it('allows chaining where handlers return pending promises', () => {
-      return new NewPromise((resolve) => {
+    it('allows chaining where onFulfilled handlers return pending promises', (done) => {
+      new NewPromise((resolve) => {
         mockAsync(() => resolve('first'));
       })
         .then((v) => {
@@ -102,6 +105,27 @@ describe('NewPromise', () => {
         })
         .then((v) => {
           expect(v).toBe('third');
+          done();
+        });
+    });
+
+    it('allows chaining where onRejected handlers return pending promises', (done) => {
+      new NewPromise((_, reject) => {
+        mockAsync(() => reject('first'));
+      })
+        .then(undefined, (r) => {
+          expect(r).toBe('first');
+          return NewPromise.reject('second');
+        })
+        .then(undefined, (r) => {
+          expect(r).toBe('second');
+          return new NewPromise((_, reject) => {
+            mockAsync(() => reject('third'));
+          });
+        })
+        .then(undefined, (r) => {
+          expect(r).toBe('third');
+          done();
         });
     });
 
