@@ -6,7 +6,7 @@ const STATE = {
   REJECTED: 'rejected',
 };
 
-const isThenable = (arg) => arg && arg.then;
+const isThenable = (arg) => arg && typeof arg.then === 'function';
 
 class NewPromise {
   constructor(executor) {
