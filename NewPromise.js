@@ -60,8 +60,8 @@ class NewPromise {
       this._state = STATE.FULFILLED;
       this._value = value;
 
-      if (this._pending) {
-        const [childPromise, onFulfilled] = this._pending;
+      if (this._thingsToHandleOnceSettled) {
+        const [childPromise, onFulfilled] = this._thingsToHandleOnceSettled;
         this._handleOnFulfilled(childPromise, onFulfilled, value);
       }
     }
@@ -72,8 +72,8 @@ class NewPromise {
       this._state = STATE.REJECTED;
       this._reason = reason;
 
-      if (this._pending) {
-        const [childPromise, _, onRejected] = this._pending;
+      if (this._thingsToHandleOnceSettled) {
+        const [childPromise, _, onRejected] = this._thingsToHandleOnceSettled;
         this._handleOnRejected(childPromise, onRejected, reason);
       }
     }
@@ -87,44 +87,45 @@ class NewPromise {
     return new NewPromise((_, reject) => reject(reason));
   }
 
-  then(onFulfilled, onRejected) {
-    onFulfilled =
-      typeof onFulfilled === 'function' ? onFulfilled : (value) => value;
-    onRejected =
-      typeof onRejected === 'function'
-        ? onRejected
+  then(_onFulfilled, _onRejected) {
+    const onFulfilled =
+      typeof _onFulfilled === 'function' ? _onFulfilled : (value) => value;
+    const onRejected =
+      typeof _onRejected === 'function'
+        ? _onRejected
         : (e) => {
             throw e;
           };
 
     const promiseToReturn = new NewPromise(noop);
 
-    if (this._state === STATE.FULFILLED) {
-      setTimeout(() => {
+    const isResolvedSynchronously = this._state === STATE.FULFILLED;
+    const isRejectedSynchronously = this._state === STATE.REJECTED;
+
+    if (isResolvedSynchronously) {
+      // Queue onFulfilled task in microtask queue
+      queueMicrotask(() => {
         this._handleOnFulfilled(promiseToReturn, onFulfilled, this._value);
-      }, 0);
-    } else if (this._state === STATE.REJECTED) {
-      setTimeout(() => {
+      });
+    } else if (isRejectedSynchronously) {
+      // Queue onRejected task in microtask queue
+      queueMicrotask(() => {
         this._handleOnRejected(promiseToReturn, onRejected, this._reason);
-      }, 0);
+      });
     } else {
-      this._pending = [promiseToReturn, onFulfilled, onRejected];
+      this._thingsToHandleOnceSettled = [
+        promiseToReturn,
+        onFulfilled,
+        onRejected,
+      ];
     }
 
     return promiseToReturn;
   }
+
+  catch(onRejected) {
+    return this.then(undefined, onRejected);
+  }
 }
 
 module.exports = NewPromise;
-
-const foo = new NewPromise((resolve, reject) => {
-  resolve(33);
-}).then(() => {
-  throw 'error!';
-});
-
-console.log(foo);
-foo.then(null, console.log);
-setTimeout(() => {
-  console.log(foo);
-}, 0);
