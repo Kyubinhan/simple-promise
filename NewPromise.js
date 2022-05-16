@@ -110,6 +110,15 @@ class NewPromise {
   catch = (onRejected) => {
     return this.then(undefined, onRejected);
   };
+
+  finally = (onFinally) => {
+    const handler = (valueOrReason) => {
+      onFinally?.();
+      return valueOrReason;
+    };
+
+    return this.then(handler, handler);
+  };
 }
 
 module.exports = NewPromise;

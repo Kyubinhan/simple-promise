@@ -155,4 +155,30 @@ describe('NewPromise', () => {
       }, 0);
     });
   });
+
+  describe('finally() method', () => {
+    it('run handler without any given argument', (done) => {
+      NewPromise.resolve(3)
+        .then(() => value)
+        .finally((arg) => {
+          expect(arg).toBe(undefined);
+        })
+        .then((v) => {
+          expect(v).toBe(value);
+          done();
+        });
+    });
+
+    it('reject the new promise with the reason when error thrown in the handler', (done) => {
+      NewPromise.resolve(3)
+        .then(() => value)
+        .finally(() => {
+          throw reason;
+        })
+        .then(undefined, (r) => {
+          expect(r).toBe(reason);
+          done();
+        });
+    });
+  });
 });
