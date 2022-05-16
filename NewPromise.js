@@ -119,6 +119,38 @@ class NewPromise {
 
     return this.then(handler, handler);
   };
+
+  static all(iterable) {
+    const values = Object.values(iterable);
+
+    let numOfResolved = 0;
+    const resolvedMap = {};
+    const handleResolve = (resolve, value, idx) => {
+      resolvedMap[idx] = value;
+      numOfResolved++;
+      if (numOfResolved === values.length) {
+        // Order is kept thx to indexed properties
+        resolve(Object.values(resolvedMap));
+      }
+    };
+
+    return new NewPromise((resolve, reject) => {
+      values.forEach((value, idx) => {
+        if (isThenable(value)) {
+          value.then(
+            (v) => {
+              handleResolve(resolve, v, idx);
+            },
+            (r) => {
+              reject(r);
+            }
+          );
+        } else {
+          handleResolve(resolve, value, idx);
+        }
+      });
+    });
+  }
 }
 
 module.exports = NewPromise;

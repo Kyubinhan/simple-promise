@@ -181,4 +181,47 @@ describe('NewPromise', () => {
         });
     });
   });
+
+  describe('all() method', () => {
+    it('throw error if given param is not iterable', () => {
+      try {
+        NewPromise.all(undefined);
+      } catch (err) {
+        expect(err.message).toBe('Cannot convert undefined or null to object');
+      }
+    });
+
+    it('resolve an array of results', (done) => {
+      const p1 = NewPromise.resolve(3);
+      const p2 = new NewPromise((resolve) => {
+        mockAsync(() => resolve(value));
+      });
+      const p3 = 42;
+
+      NewPromise.all([p1, p2, p3]).then((values) => {
+        expect(values).toEqual([3, value, 42]);
+        done();
+      });
+    });
+
+    it('fail fast when any of elements are rejected', (done) => {
+      const p1 = NewPromise.resolve(3);
+      const p2 = new NewPromise((resolve) => {
+        mockAsync(() => resolve(value));
+      });
+      const p3 = NewPromise.reject(reason);
+
+      const mockResolve = jest.fn();
+      const mockReject = jest.fn();
+
+      NewPromise.all([p1, p2, p3]).then(mockResolve).catch(mockReject);
+
+      setTimeout(() => {
+        expect(mockResolve).toHaveBeenCalledTimes(0);
+        expect(mockReject).toHaveBeenCalledTimes(1);
+        expect(mockReject).toHaveBeenCalledWith(reason);
+        done();
+      }, 0);
+    });
+  });
 });
