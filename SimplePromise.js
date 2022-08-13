@@ -1,44 +1,23 @@
-/**
- * Represents the completion of an asynchronous operation
- */
+const noop = () => {};
+
+const STATE = {
+  PENDING: 'pending',
+  FULFILLED: 'fulfilled',
+  REJECTED: 'rejected',
+};
+
+const isThenable = (arg) => arg && typeof arg.then === 'function';
+
 class SimplePromise {
-  #state = 'pending';
-  #value;
-  #reason;
-  #onFulfilled;
-  #onRejected;
-  #onFinally;
-
-  /**
-   * @param {Function} executor A callback used to initialize the promise.
-   */
   constructor(executor) {
-    const resolve = (value) => {
-      this.#state = 'fulfilled';
+    if (!executor) {
+      throw new TypeError('Please provide executor');
+    }
 
-      this.#value = value;
+    this._state = STATE.PENDING;
 
-      if (this.#onFulfilled) {
-        this.#onFulfilled(value);
-      }
-
-      if (this.#onFinally) {
-        this.#onFinally(value, null);
-      }
-    };
-    const reject = (reason) => {
-      this.#state = 'rejected';
-
-      this.#reason = reason;
-
-      if (this.#onRejected) {
-        this.#onRejected(reason);
-      }
-
-      if (this.#onFinally) {
-        this.#onFinally(null, reason);
-      }
-    };
+    const resolve = this._resolveToSettle;
+    const reject = this._rejectToSettle;
 
     try {
       executor(resolve, reject);
@@ -47,14 +26,100 @@ class SimplePromise {
     }
   }
 
-  /**
-   * Creates a Promise that is resolved with an array of results when all of the
-   * provided Promises resolve, or rejected when any Promise is rejected.
-   *
-   * @param {Array} iterable An iterable of Promises.
-   *
-   * @returns A new Promise.
-   */
+  _resolveToSettle = (value) => {
+    if (this._state === STATE.PENDING) {
+      this._state = STATE.FULFILLED;
+      this._value = value;
+
+      if (this._thingsToHandleOnceSettled) {
+        const [childPromise, onFulfilled] = this._thingsToHandleOnceSettled;
+        this._executeHandler(childPromise, onFulfilled, value);
+      }
+    }
+  };
+
+  _rejectToSettle = (reason) => {
+    if (this._state === STATE.PENDING) {
+      this._state = STATE.REJECTED;
+      this._reason = reason;
+
+      if (this._thingsToHandleOnceSettled) {
+        const [childPromise, _, onRejected] = this._thingsToHandleOnceSettled;
+        this._executeHandler(childPromise, onRejected, reason);
+      }
+    }
+  };
+
+  _executeHandler(promise, handler, valueOrReason) {
+    // Queue handler task in microtask queue
+    queueMicrotask(() => {
+      try {
+        const valueOrError = handler(valueOrReason);
+        if (isThenable(valueOrError)) {
+          valueOrError.then(
+            (v) => promise._resolveToSettle(v),
+            (r) => promise._rejectToSettle(r)
+          );
+        } else {
+          promise._resolveToSettle(valueOrError);
+        }
+      } catch (err) {
+        promise._rejectToSettle(err);
+      }
+    });
+  }
+
+  static resolve(value) {
+    return new SimplePromise((resolve) => resolve(value));
+  }
+
+  static reject(reason) {
+    return new SimplePromise((_, reject) => reject(reason));
+  }
+
+  then = (_onFulfilled, _onRejected) => {
+    const onFulfilled =
+      typeof _onFulfilled === 'function' ? _onFulfilled : (value) => value;
+    const onRejected =
+      typeof _onRejected === 'function'
+        ? _onRejected
+        : (e) => {
+            throw e;
+          };
+
+    const promiseToReturn = new SimplePromise(noop);
+
+    const isResolvedRightAway = this._state === STATE.FULFILLED;
+    const isRejectedRightAway = this._state === STATE.REJECTED;
+
+    if (isResolvedRightAway) {
+      this._executeHandler(promiseToReturn, onFulfilled, this._value);
+    } else if (isRejectedRightAway) {
+      this._executeHandler(promiseToReturn, onRejected, this._reason);
+    } else {
+      this._thingsToHandleOnceSettled = [
+        promiseToReturn,
+        onFulfilled,
+        onRejected,
+      ];
+    }
+
+    return promiseToReturn;
+  };
+
+  catch = (onRejected) => {
+    return this.then(undefined, onRejected);
+  };
+
+  finally = (onFinally) => {
+    const handler = (valueOrReason) => {
+      onFinally?.();
+      return valueOrReason;
+    };
+
+    return this.then(handler, handler);
+  };
+
   static all(iterable) {
     const values = Object.values(iterable);
 
@@ -71,7 +136,7 @@ class SimplePromise {
 
     return new SimplePromise((resolve, reject) => {
       values.forEach((value, idx) => {
-        if (value instanceof SimplePromise) {
+        if (isThenable(value)) {
           value.then(
             (v) => {
               handleResolve(resolve, v, idx);
@@ -84,127 +149,6 @@ class SimplePromise {
           handleResolve(resolve, value, idx);
         }
       });
-    });
-  }
-
-  /**
-   * Creates a new resolved promise for the provided value.
-   * @param value A promise.
-   *
-   * @returns A promise whose internal state matches the provided promise..
-   */
-  static resolve(value) {
-    if (value instanceof SimplePromise) {
-      return value;
-    } else if (value?.then /* handle thenable */) {
-      return new SimplePromise(value.then);
-    }
-
-    // Turn non-promise value into a promise
-    return new SimplePromise((resolve) => {
-      resolve(value);
-    });
-  }
-
-  /**
-   * Creates a new rejected promise for the provided reason.
-   *
-   * @param reason The reason the promise was rejected.
-   *
-   * @returns A new rejected Promise.
-   */
-  static reject(reason) {
-    return new SimplePromise((_, reject) => {
-      reject(reason);
-    });
-  }
-
-  /**
-   * Attaches callbacks for the resolution and/or rejection of the Promise.
-   *
-   * @param onFulfilled The callback to execute when the Promise is resolved.
-   * @param onRejected The callback to execute when the Promise is rejected.
-   *
-   * @returns A Promise for the completion of which ever callback is executed.
-   */
-  then(onFulfilled, onRejected) {
-    const isResolvedSynchronously = this.#state === 'fulfilled';
-    const isRejectedSynchronously = this.#state === 'rejected';
-    const isCatchChained = !onFulfilled && onRejected;
-
-    const handleFulFill = (resolve, reject, value) => {
-      const returned = onFulfilled ? onFulfilled(value) : value;
-
-      // Relay the returned value based on its type
-      if (returned instanceof SimplePromise) {
-        returned.then(resolve, reject);
-      } else {
-        resolve(returned);
-      }
-    };
-    const handleReject = (resolve, reject, reason) => {
-      onRejected?.(reason);
-
-      if (isCatchChained) {
-        // After a catch the chain is restored hence resolve it
-        resolve();
-      } else {
-        reject(reason);
-      }
-    };
-
-    return new SimplePromise((resolve, reject) => {
-      if (isResolvedSynchronously) {
-        handleFulFill(resolve, reject, this.#value);
-      } else if (isRejectedSynchronously) {
-        handleReject(resolve, reject, this.#reason);
-      } else {
-        // Schedule to run later when resolved or rejected at some point
-        this.#onFulfilled = (value) => handleFulFill(resolve, reject, value);
-        this.#onRejected = (reason) => handleReject(resolve, reject, reason);
-      }
-    });
-  }
-
-  /**
-   * Attaches a callback for only the rejection of the Promise.
-   *
-   * @param onRejected The callback to execute when the Promise is rejected.
-   *
-   * @returns A Promise for the completion of the callback.
-   */
-  catch(onRejected) {
-    return this.then(undefined, onRejected);
-  }
-
-  /**
-   * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected).
-   * The resolved value cannot be modified from the callback.
-   *
-   * @param onFinally The callback to execute when the Promise is settled (fulfilled or rejected).
-   *
-   * @returns A Promise for the completion of the callback.
-   */
-  finally(onFinally) {
-    const isPending = this.#state === 'pending';
-
-    const handleFinally = (resolve, reject, value, reason) => {
-      onFinally?.();
-
-      if (value) {
-        resolve(value);
-      } else if (reason) {
-        reject(reason);
-      }
-    };
-
-    return new SimplePromise((resolve, reject) => {
-      if (isPending) {
-        this.#onFinally = (value, reason) =>
-          handleFinally(resolve, reject, value, reason);
-      } else {
-        handleFinally(resolve, reject, this.#value, this.#reason);
-      }
     });
   }
 }
